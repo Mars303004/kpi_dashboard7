@@ -2,6 +2,14 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
+# Fungsi untuk membulatkan angka numerik ke 2 desimal
+def round_numeric_columns(df_in):
+    df_out = df_in.copy()
+    for col in ['Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb']:
+        if col in df_out.columns:
+            df_out[col] = pd.to_numeric(df_out[col], errors='coerce').round(2)
+    return df_out
+
 # ========== PAGE CONFIG ==========
 st.set_page_config(layout="wide", page_title="KPI Dashboard")
 
@@ -201,34 +209,33 @@ if selected_kpi_code:
         fig_detail = go.Figure()
 
         # Siapkan data
-        x_data = ['Actual Jan', 'Actual Feb']  # Modify if you have more months
-        y_data = [kpi_row[x] for x in x_data]
-        x_clean = [x.replace("Actual ", "") for x in x_data]
+    x_data = [col for col in df.columns if 'Actual' in col and col.split()[-1] in df.columns[0:]]
+    y_data = kpi_data[x_data].values.tolist()
+    x_clean = [x.replace("Actual ", "") for x in x_data]
 
-        # Target tahunan
-        target_tahunan = kpi_row['Target Tahunan']
-        target_line = go.Scatter(
-            x=x_clean,
-            y=[target_tahunan] * len(x_clean),
-            mode='lines',
-            name='Target Tahunan',
-            line=dict(color='green', dash='dash')
-        )
+    # Garis target tahunan (horizontal penuh)
+    target_line = go.Scatter(
+        x=x_clean,
+        y=[target_tahunan] * len(x_clean),
+        mode='lines',
+        name='Target Tahunan',
+        line=dict(color='green', dash='dash')
+    )
 
-        # Garis aktual bulanan
-        actual_line = go.Scatter(
-            x=x_clean,
-            y=y_data,
-            mode='lines+markers',
-            name='Kinerja Bulanan',
-            line=dict(color='#0f098e')
-        )
+    # Garis aktual bulanan
+    actual_line = go.Scatter(
+        x=x_clean,
+        y=y_data,
+        mode='lines+markers',
+        name='Kinerja Bulanan',
+        line=dict(color='#0f098e')
+    )
 
-        fig = go.Figure(data=[target_line, actual_line])
-        fig.update_layout(
-            xaxis_title='Bulan',
-            yaxis_title='Nilai',
-            xaxis=dict(showticklabels=True),  # Tampilkan label bulan
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    fig = go.Figure(data=[target_line, actual_line])
+    fig.update_layout(
+        xaxis_title='Kategori',
+        yaxis_title='Nilai',
+        xaxis=dict(showticklabels=False),  # Hapus label sumbu X
+        height=400
+    )
+    st.plotly_chart(fig, use_container_width=True)
