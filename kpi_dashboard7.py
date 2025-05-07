@@ -184,7 +184,7 @@ def style_row(row):
         return [''] * len(row)
 
 display_cols = ['Kode KPI', 'KPI', 'Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb', 'Measurement Type', 'Status']
-table_df = round_numeric_columns(filtered_df[display_cols]).copy()
+table_df = filtered_df[display_cols].copy()
 
 st.dataframe(table_df.style.apply(style_row, axis=1), use_container_width=True)
 
