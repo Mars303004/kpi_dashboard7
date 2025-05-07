@@ -2,14 +2,6 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
-# Fungsi untuk membulatkan angka numerik ke 2 desimal
-def round_numeric_columns(df_in):
-    df_out = df_in.copy()
-    for col in ['Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb']:
-        if col in df_out.columns:
-            df_out[col] = pd.to_numeric(df_out[col], errors='coerce').round(2)
-    return df_out
-
 # ========== PAGE CONFIG ==========
 st.set_page_config(layout="wide", page_title="KPI Dashboard")
 
