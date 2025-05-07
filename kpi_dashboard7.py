@@ -1,4 +1,3 @@
-# File: kpi_dashboard.py
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -35,7 +34,7 @@ st.title("📈 KPI Dashboard")
 # ========== LOAD DATA ==========
 file_path = "Dashboard 7.csv"
 if not os.path.exists(file_path):
-    st.error(f"File `{file_path}` tidak ditemukan.")
+    st.error(f"File {file_path} tidak ditemukan.")
     st.stop()
 
 try:
@@ -54,7 +53,7 @@ filtered_df = df[df['Perspective'] == selected_perspective]
 # ========== KPI SUMMARY ==========
 st.markdown("### 📊 Ringkasan KPI")
 
-summary_grid = grid(2, [1, 1], gap="1rem")
+summary_grid = grid(2, [1, 1], gap="medium")
 with summary_grid.container():
     st.markdown("**✅ Top 5 Best KPI**")
     best = df.sort_values("%Achv", ascending=False).head(5)
@@ -68,7 +67,7 @@ with summary_grid.container():
 # ========== KPI DETAIL ==========
 st.markdown(f"### 📋 Daftar KPI - Perspective: {selected_perspective}")
 
-kpi_grid = grid(len(filtered_df), [3, 1], gap="0.5rem")
+kpi_grid = grid(len(filtered_df), [3, 1], gap="medium")
 
 for i, row in filtered_df.iterrows():
     with kpi_grid.container():
