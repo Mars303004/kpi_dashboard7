@@ -198,36 +198,31 @@ if selected_kpi_code:
     if pd.isna(actual_feb) or str(actual_feb).strip().upper() == 'NA':
         st.info("Belum ada data yang tersedia untuk KPI ini.")
     else:
-        fig_detail = go.Figure()
+        target_tahunan = kpi_row['Target Tahunan']
+        x_data = [col for col in df.columns if col.startswith('Actual')]
+        y_data = kpi_row[x_data].values.tolist()
+        x_clean = [col.replace('Actual ', '') for col in x_data]
 
-        # Siapkan data
-    x_data = [col for col in df.columns if 'Actual' in col and col.split()[-1] in df.columns[0:]]
-    y_data = kpi_data[x_data].values.tolist()
-    x_clean = [x.replace("Actual ", "") for x in x_data]
+        target_line = go.Scatter(
+            x=x_clean,
+            y=[target_tahunan] * len(x_clean),
+            mode='lines',
+            name='Target Tahunan',
+            line=dict(color='green', dash='dash')
+        )
 
-    # Garis target tahunan (horizontal penuh)
-    target_line = go.Scatter(
-        x=x_clean,
-        y=[target_tahunan] * len(x_clean),
-        mode='lines',
-        name='Target Tahunan',
-        line=dict(color='green', dash='dash')
-    )
+        actual_line = go.Scatter(
+            x=x_clean,
+            y=y_data,
+            mode='lines+markers',
+            name='Kinerja Bulanan',
+            line=dict(color='#0f098e')
+        )
 
-    # Garis aktual bulanan
-    actual_line = go.Scatter(
-        x=x_clean,
-        y=y_data,
-        mode='lines+markers',
-        name='Kinerja Bulanan',
-        line=dict(color='#0f098e')
-    )
-
-    fig = go.Figure(data=[target_line, actual_line])
-    fig.update_layout(
-        xaxis_title='Kategori',
-        yaxis_title='Nilai',
-        xaxis=dict(showticklabels=False),  # Hapus label sumbu X
-        height=400
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        fig_detail = go.Figure(data=[target_line, actual_line])
+        fig_detail.update_layout(
+            xaxis_title='Bulan',
+            yaxis_title='Nilai',
+            height=400
+        )
+        st.plotly_chart(fig_detail, use_container_width=True)
