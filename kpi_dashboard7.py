@@ -3,232 +3,233 @@ import streamlit as st
 import plotly.graph_objects as go
 
 # ========== PAGE CONFIG ==========
-st.set_page_config(layout="wide", page_title="KPI Dashboard")
+st.set_page_config(layout="wide", page_title="Dashboard KPI dengan Traffic Light Status")
 
 # ========== LOAD DATA ==========
 file_path = "Dashboard 7.csv"
 df = pd.read_csv(file_path)
 
-# ========== DATA PREPARATION ==========
 # Pastikan kolom penting ada
-required_cols = ['Perspective', 'Kode KPI', 'KPI', 'Target Tahunan', 'Measurement Type',
-                 'Target Jan', 'Actual Jan', 'Achv Jan', 'Target Feb', 'Actual Feb', 'Achv Feb']
+required_cols = ['Perspective', 'Kode KPI', 'KPI', 'Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb', 'Achv Feb', 'Measurement Type']
 for col in required_cols:
     if col not in df.columns:
         st.error(f"Kolom '{col}' tidak ditemukan di data.")
         st.stop()
 
-# Konversi Achv Feb ke numerik, N/A jadi NaN
-df['Achv Feb Num'] = pd.to_numeric(df['Achv Feb'].str.replace('%','').str.replace(',','.'), errors='coerce')
+# Konversi Achv Feb ke numeric, non-konvertible jadi NaN
+df['Achv Feb'] = pd.to_numeric(df['Achv Feb'], errors='coerce')
 
-def get_status(achv):
+# Fungsi status warna
+def get_status_color(achv):
     if pd.isna(achv):
         return 'Hitam'
-    elif achv > 99:
-        return 'Hijau'
-    elif 70 <= achv <= 99:
-        return 'Kuning'
     elif achv < 70:
         return 'Merah'
-    return 'Hitam'
+    elif 70 <= achv < 100:
+        return 'Kuning'
+    elif achv >= 100:
+        return 'Hijau'
+    else:
+        return 'Hitam'
 
-df['Status'] = df['Achv Feb Num'].apply(get_status)
+df['Status'] = df['Achv Feb'].apply(get_status_color)
 
-# ========== WARNA ==========
-COLOR_RED = "#b42020"
-COLOR_BLUE = "#0f098e"
-COLOR_WHITE = "#ffffff"
-COLOR_GREEN = "#1bb934"
-COLOR_YELLOW = "#ffe600"
-COLOR_BLACK = "#222222"
-
-status_color_map = {
-    "Merah": COLOR_RED,
-    "Kuning": COLOR_YELLOW,
-    "Hijau": COLOR_GREEN,
-    "Hitam": COLOR_BLACK
+# Warna untuk status
+status_colors = {
+    'Merah': 'red',
+    'Kuning': 'yellow',
+    'Hijau': 'green',
+    'Hitam': 'black'
 }
 
-# ========== CHART TRAFFIC LIGHT GLOBAL ==========
-def get_status_counts(data):
-    return {
-        "Merah": (data['Status'] == "Merah").sum(),
-        "Kuning": (data['Status'] == "Kuning").sum(),
-        "Hijau": (data['Status'] == "Hijau").sum(),
-        "Hitam": (data['Status'] == "Hitam").sum()
-    }
+# ================== LAYOUT ATAS: CHART TRAFFIC LIGHT GLOBAL & PER PERSPECTIVE ==================
+st.markdown("<h1 style='color:#b42020;'>Dashboard KPI dengan Traffic Light Status</h1>", unsafe_allow_html=True)
 
-global_counts = get_status_counts(df)
-
-fig_global = go.Figure(data=[
-    go.Bar(
-        x=list(global_counts.keys()),
-        y=list(global_counts.values()),
-        marker_color=[COLOR_RED, COLOR_YELLOW, COLOR_GREEN, COLOR_BLACK],
-        text=list(global_counts.values()),
-        textposition='auto'
-    )
-])
-fig_global.update_layout(
-    title="Total KPI Status (Global)",
-    plot_bgcolor=COLOR_WHITE,
-    paper_bgcolor=COLOR_WHITE,
-    font=dict(color=COLOR_BLUE, size=16),
-    margin=dict(l=20, r=20, t=40, b=20)
-)
-
-# ========== CHART TRAFFIC LIGHT PER PERSPECTIVE ==========
-perspectives = df['Perspective'].dropna().unique().tolist()
-perspective_counts = {p: get_status_counts(df[df['Perspective'] == p]) for p in perspectives}
-
-fig_persp = go.Figure()
-for status, color in status_color_map.items():
-    fig_persp.add_trace(go.Bar(
-        x=perspectives,
-        y=[perspective_counts[p][status] for p in perspectives],
-        name=status,
-        marker_color=color
-    ))
-fig_persp.update_layout(
-    barmode='stack',
-    title="KPI Status per Perspective",
-    plot_bgcolor=COLOR_WHITE,
-    paper_bgcolor=COLOR_WHITE,
-    font=dict(color=COLOR_BLUE, size=16),
-    margin=dict(l=20, r=20, t=40, b=20),
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-)
-
-# ========== LAYOUT ATAS: CHART SAMPINGAN ==========
 col1, col2 = st.columns(2)
+
 with col1:
+    st.markdown("### Total KPI Status (Global)")
+    status_order = ['Merah', 'Kuning', 'Hijau', 'Hitam']
+    global_counts = df['Status'].value_counts().reindex(status_order, fill_value=0)
+    fig_global = go.Figure()
+    fig_global.add_trace(go.Bar(
+        x=status_order,
+        y=global_counts.values,
+        marker_color=[status_colors[s] for s in status_order],
+        text=global_counts.values,
+        textposition='auto'
+    ))
+    fig_global.update_layout(yaxis_title='Jumlah KPI', xaxis_title='Status', plot_bgcolor='white', height=350)
     st.plotly_chart(fig_global, use_container_width=True)
+
 with col2:
+    st.markdown("### KPI Status per Perspective")
+    # Hitung jumlah per perspective dan status
+    perspective_status = df.groupby(['Perspective', 'Status']).size().unstack(fill_value=0)
+    # Pastikan semua status ada kolomnya
+    for s in status_order:
+        if s not in perspective_status.columns:
+            perspective_status[s] = 0
+    perspective_status = perspective_status[status_order]  # urutkan kolom
+    fig_persp = go.Figure()
+    bottom = [0]*len(perspective_status)
+    for s in status_order:
+        fig_persp.add_trace(go.Bar(
+            x=perspective_status.index,
+            y=perspective_status[s],
+            name=s,
+            marker_color=status_colors[s],
+            text=perspective_status[s],
+            textposition='auto',
+            offsetgroup=0,
+            base=bottom
+        ))
+        bottom = [bottom[i] + perspective_status[s].iloc[i] for i in range(len(bottom))]
+    fig_persp.update_layout(barmode='stack', yaxis_title='Jumlah KPI', xaxis_title='Perspective', plot_bgcolor='white', height=350)
     st.plotly_chart(fig_persp, use_container_width=True)
 
-# ========== FILTER PERSPECTIVE (SINGLE SELECT, TOMBOL BESAR 2x2) ==========
-st.markdown(f"<h2 style='color:{COLOR_RED};margin-top:0.5em;'>Filter Perspective</h2>", unsafe_allow_html=True)
-persp_options = perspectives
-selected_persp = st.radio(
-    "Pilih Perspective (klik salah satu):",
-    options=persp_options,
-    index=0,
-    format_func=lambda x: x,
-    horizontal=False,
-    key="persp_radio"
-)
+# ================== FILTER PERSPECTIVE (2x2 tombol besar) ==================
+st.markdown("<h3 style='color:#b42020;'>Filter Perspective (klik salah satu):</h3>", unsafe_allow_html=True)
 
-# Custom tombol besar 2x2
-st.markdown(
-    """
-    <style>
-    div[role="radiogroup"] > label {
-        display: inline-block;
-        width: 180px;
-        height: 80px;
-        margin: 10px 20px 10px 0;
-        background: #0f098e;
-        color: #fff !important;
-        font-size: 1.5em;
-        font-weight: bold;
-        border-radius: 16px;
-        text-align: center;
-        line-height: 80px;
+perspectives = df['Perspective'].dropna().unique().tolist()
+perspectives.sort()
+
+# Buat tombol 2x2 dengan warna latar #0f098e dan font putih
+selected_perspective = None
+cols = st.columns(2)
+for i, p in enumerate(perspectives):
+    col = cols[i % 2]
+    is_selected = False
+    if 'selected_perspective' in st.session_state:
+        is_selected = (st.session_state.selected_perspective == p)
+    else:
+        # default pilih perspektif pertama
+        if i == 0:
+            is_selected = True
+            st.session_state.selected_perspective = p
+
+    button_style = f"""
+        background-color: {'#0f098e' if not is_selected else '#b42020'};
+        color: white;
+        font-size: 1.5rem;
+        width: 100%;
+        height: 60px;
+        border-radius: 10px;
+        border: none;
+        margin-bottom: 10px;
         cursor: pointer;
-        border: 3px solid #b42020;
-        transition: 0.2s;
+    """
+
+    if col.button(p, key=f"btn_{p}", help=f"Pilih perspektif {p}"):
+        st.session_state.selected_perspective = p
+
+selected_perspective = st.session_state.selected_perspective
+
+# ================== FILTER DATA BERDASARKAN PERSPECTIVE ==================
+filtered_df = df[df['Perspective'] == selected_perspective].reset_index(drop=True)
+
+# ================== TABEL KPI DENGAN CONDITIONAL FORMATTING ==================
+st.markdown(f"<h3 style='color:#b42020;'>Daftar KPI untuk Perspective: {selected_perspective}</h3>", unsafe_allow_html=True)
+st.markdown("Klik tombol 'Show Chart' di sebelah kanan untuk melihat detail KPI.")
+
+# Buat tabel HTML dengan conditional formatting baris merah jika status Merah
+def generate_table_html(data):
+    header_color = "#0f098e"
+    header_font_color = "white"
+    row_red_bg = "#f8d7da"
+    row_red_font = "#842029"
+    row_default_bg = "white"
+    row_default_font = "black"
+
+    html = """
+    <style>
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        font-family: Arial, sans-serif;
     }
-    div[role="radiogroup"] > label[data-selected="true"] {
-        background: #b42020 !important;
-        color: #fff !important;
-        border: 3px solid #0f098e;
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    th {
+        background-color: """ + header_color + """;
+        color: """ + header_font_color + """;
+        font-size: 1.1rem;
     }
     </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# ========== FILTER DATA KPI ==========
-filtered_df = df[df['Perspective'] == selected_persp].reset_index(drop=True)
-
-# ========== TABEL KPI (HTML) ==========
-st.markdown(f"<h2 style='color:{COLOR_RED};margin-top:1em;'>Daftar KPI untuk Perspective: {selected_persp}</h2>", unsafe_allow_html=True)
-st.write("Klik tombol 'Show Chart' di sebelah kanan untuk melihat detail KPI.")
-
-def row_html(row, idx):
-    status = row['Status']
-    bg = status_color_map.get(status, COLOR_WHITE)
-    font = COLOR_WHITE if status == "Merah" else COLOR_BLUE
-    return f"""
-    <tr style="background-color:{bg};color:{font};font-size:1.1em;">
-        <td style="padding:8px;">{row['Kode KPI']}</td>
-        <td style="padding:8px;">{row['KPI']}</td>
-        <td style="padding:8px;text-align:right;">{row['Target Tahunan']}</td>
-        <td style="padding:8px;text-align:right;">{row['Actual Jan']}</td>
-        <td style="padding:8px;text-align:right;">{row['Target Feb']}</td>
-        <td style="padding:8px;text-align:right;">{row['Actual Feb']}</td>
-        <td style="padding:8px;">{row['Measurement Type']}</td>
-        <td style="padding:8px;text-align:center;">
-            <form action="" method="post">
-                <button name="show_chart" value="{idx}" style="background:{COLOR_BLUE};color:#fff;font-size:1em;padding:8px 18px;border:none;border-radius:8px;cursor:pointer;">Show Chart</button>
-            </form>
-        </td>
-    </tr>
+    <table>
+        <thead>
+            <tr>
+                <th>Kode KPI</th>
+                <th>KPI</th>
+                <th style="text-align:right;">Target Tahunan</th>
+                <th style="text-align:right;">Actual Jan</th>
+                <th style="text-align:right;">Target Feb</th>
+                <th style="text-align:right;">Actual Feb</th>
+                <th>Measurement Type</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody>
     """
 
-table_html = f"""
-<table style="width:100%;border-collapse:collapse;margin-top:1em;">
-    <thead>
-        <tr style="background-color:{COLOR_BLUE};color:#fff;font-size:1.2em;">
-            <th style="padding:8px;">Kode KPI</th>
-            <th style="padding:8px;">KPI</th>
-            <th style="padding:8px;">Target Tahunan</th>
-            <th style="padding:8px;">Actual Jan</th>
-            <th style="padding:8px;">Target Feb</th>
-            <th style="padding:8px;">Actual Feb</th>
-            <th style="padding:8px;">Measurement Type</th>
-            <th style="padding:8px;">Aksi</th>
+    for i, row in data.iterrows():
+        bg_color = row_red_bg if row['Status'] == 'Merah' else row_default_bg
+        font_color = row_red_font if row['Status'] == 'Merah' else row_default_font
+        html += f"""
+        <tr style="background-color:{bg_color};color:{font_color};">
+            <td>{row['Kode KPI']}</td>
+            <td>{row['KPI']}</td>
+            <td style="text-align:right;">{row['Target Tahunan']}</td>
+            <td style="text-align:right;">{row['Actual Jan'] if pd.notna(row['Actual Jan']) else ''}</td>
+            <td style="text-align:right;">{row['Target Feb']}</td>
+            <td style="text-align:right;">{row['Actual Feb'] if pd.notna(row['Actual Feb']) else ''}</td>
+            <td>{row['Measurement Type']}</td>
+            <td><button id="show_chart_{i}" style="background:#0f098e;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;">Show Chart</button></td>
         </tr>
-    </thead>
-    <tbody>
-"""
-for idx, row in filtered_df.iterrows():
-    table_html += row_html(row, idx)
-table_html += "</tbody></table>"
+        """
 
+    html += "</tbody></table>"
+    return html
+
+# Render tabel dengan HTML
+table_html = generate_table_html(filtered_df)
 st.markdown(table_html, unsafe_allow_html=True)
 
-# ========== SHOW CHART (LINE CHART) ==========
-# Tangkap tombol Show Chart
-show_chart_idx = st.session_state.get("show_chart_idx", None)
-for idx in range(len(filtered_df)):
-    if st.form_submit_button(f"Show Chart {idx}"):
-        st.session_state["show_chart_idx"] = idx
-        show_chart_idx = idx
+# ================== INTERAKSI SHOW CHART ==================
+# Karena tombol HTML tidak bisa langsung diproses Streamlit,
+# kita buat tombol Streamlit di samping tabel untuk setiap baris
 
-if show_chart_idx is not None and show_chart_idx < len(filtered_df):
-    kpi = filtered_df.iloc[show_chart_idx]
-    st.markdown(f"<h3 style='color:{COLOR_BLUE};margin-top:1em;'>Detail KPI: {kpi['Kode KPI']} - {kpi['KPI']}</h3>", unsafe_allow_html=True)
+st.markdown("<br>")
+st.markdown("### Pilih KPI untuk lihat detail chart:")
+
+cols = st.columns([8,1])
+with cols[0]:
+    for i, row in filtered_df.iterrows():
+        st.write(f"**{row['Kode KPI']} - {row['KPI']}**")
+with cols[1]:
+    selected_chart_idx = None
+    for i in range(len(filtered_df)):
+        if st.button("Show Chart", key=f"show_chart_{i}"):
+            selected_chart_idx = i
+
+if selected_chart_idx is not None:
+    kpi = filtered_df.loc[selected_chart_idx]
+    st.markdown(f"### Detail Chart KPI: {kpi['Kode KPI']} - {kpi['KPI']}")
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=['Target Jan', 'Actual Jan', 'Target Feb', 'Actual Feb'],
-        y=[
-            float(kpi['Target Jan']) if pd.notna(kpi['Target Jan']) else None,
-            float(kpi['Actual Jan']) if pd.notna(kpi['Actual Jan']) else None,
-            float(kpi['Target Feb']) if pd.notna(kpi['Target Feb']) else None,
-            float(kpi['Actual Feb']) if pd.notna(kpi['Actual Feb']) else None
-        ],
+        x=['Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb'],
+        y=[kpi['Target Tahunan'], kpi['Actual Jan'], kpi['Target Feb'], kpi['Actual Feb']],
         mode='lines+markers',
-        line=dict(color=COLOR_BLUE, width=4),
-        marker=dict(size=12, color=COLOR_RED)
+        line=dict(color='#0f098e', width=3),
+        marker=dict(size=10)
     ))
     fig.update_layout(
         yaxis_title='Nilai',
-        xaxis_title='Bulan',
-        plot_bgcolor=COLOR_WHITE,
-        paper_bgcolor=COLOR_WHITE,
-        font=dict(color=COLOR_BLUE, size=16),
-        height=500,
-        width=800
+        xaxis_title='Kategori',
+        plot_bgcolor='white',
+        height=400
     )
-    st.plotly_chart(fig, use_container_width=False)
+    st.plotly_chart(fig, use_container_width=True)
