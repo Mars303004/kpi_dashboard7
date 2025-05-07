@@ -157,4 +157,17 @@ if len(df_filtered) > 0:
         mode='lines+markers+text',
         text=trend,
         textposition='top center',
-        line
+        line=dict(color='#0f098e', width=3),
+        marker=dict(size=8, color='#b42020')
+    ))
+
+    fig.update_layout(
+        xaxis_title="Bulan",
+        yaxis_title="Nilai",
+        margin=dict(l=40, r=40, t=40, b=40),
+        height=400
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("Tidak ada KPI untuk perspective ini.")
