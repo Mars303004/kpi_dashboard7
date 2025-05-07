@@ -18,7 +18,7 @@ color_dict = {
 }
 
 # Load data
-df = pd.read_excel("Coba excel.xlsx", sheet_name="Dulu")
+df = pd.read_csv("Dashboard 7.csv")  # Ganti di sini
 
 # Tambahkan kolom Status
 def calculate_status(row):
