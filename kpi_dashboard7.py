@@ -2,225 +2,98 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
-# ========== PAGE CONFIG ==========
-st.set_page_config(layout="wide", page_title="KPI Dashboard")
+# Load data
+df = pd.read_excel("Coba excel.xlsx", sheet_name="Dulu")
 
-# ========== LOAD DATA ==========
-file_path = "Dashboard 7.csv"
-df = pd.read_csv(file_path)
-
-# ========== DATA PREPARATION ==========
-required_cols = ['Perspective', 'Kode KPI', 'KPI', 'Target Tahunan', 'Measurement Type',
-                 'Target Jan', 'Actual Jan', 'Achv Jan', 'Target Feb', 'Actual Feb', 'Achv Feb']
-for col in required_cols:
-    if col not in df.columns:
-        st.error(f"Kolom '{col}' tidak ditemukan di data.")
-        st.stop()
-
-df['Achv Feb Num'] = pd.to_numeric(df['Achv Feb'].str.replace('%','').str.replace(',','.'), errors='coerce')
-
-def get_status(achv):
-    if pd.isna(achv):
-        return 'Hitam'
-    elif achv < 70:
-        return 'Merah'
-    elif 70 <= achv <= 99:
-        return 'Kuning'
+# Traffic light logic
+def get_status(row):
+    if row["%Achv"].lower() == "n/a":
+        return "Hitam"
+    elif float(row["%Achv"]) < 70:
+        return "Merah"
+    elif 70 <= float(row["%Achv"]) <= 100:
+        return "Kuning"
     else:
-        return 'Hijau'
+        return "Hijau"
 
-df['Status'] = df['Achv Feb Num'].apply(get_status)
+df["Status"] = df.apply(get_status, axis=1)
 
-# ========== WARNA ==========
-COLOR_RED = "#b42020"
-COLOR_BLUE = "#0f098e"
-COLOR_WHITE = "#ffffff"
-COLOR_GREEN = "#1bb934"
-COLOR_YELLOW = "#ffe600"
-COLOR_BLACK = "#222222"
+# === Ringkasan Total KPI Status ===
+st.markdown("### Total KPI Status (Global)")
+status_order = ["Merah", "Kuning", "Hijau", "Hitam"]
+color_map = {"Hijau": "green", "Kuning": "yellow", "Merah": "red", "Hitam": "black"}
 
-status_color_map = {
-    "Merah": COLOR_RED,
-    "Kuning": COLOR_YELLOW,
-    "Hijau": COLOR_GREEN,
-    "Hitam": COLOR_BLACK
-}
+status_counts = df["Status"].value_counts().reindex(status_order, fill_value=0)
 
-# ========== CHART TRAFFIC LIGHT GLOBAL ==========
-def get_status_counts(data):
-    return {
-        "Merah": (data['Status'] == "Merah").sum(),
-        "Kuning": (data['Status'] == "Kuning").sum(),
-        "Hijau": (data['Status'] == "Hijau").sum(),
-        "Hitam": (data['Status'] == "Hitam").sum()
-    }
+fig_global = go.Figure(data=[
+    go.Bar(
+        x=status_counts.index,
+        y=status_counts.values,
+        text=status_counts.values,
+        textposition='auto',
+        marker_color=[color_map[status] for status in status_counts.index]
+    )
+])
+fig_global.update_layout(yaxis_title="Jumlah KPI")
+st.plotly_chart(fig_global, use_container_width=True)
 
-global_counts = get_status_counts(df)
+# === KPI Status per Perspective ===
+st.markdown("### KPI Status per Perspective")
+perspective_counts = df.groupby(["Perspective", "Status"]).size().unstack(fill_value=0).reindex(columns=status_order).fillna(0)
 
-fig_global = go.Figure()
-for status in ['Merah', 'Kuning', 'Hijau', 'Hitam']:
-    fig_global.add_trace(go.Bar(
-        x=[status],
-        y=[global_counts[status]],
+fig_perspective = go.Figure()
+for status in status_order:
+    fig_perspective.add_trace(go.Bar(
+        x=perspective_counts.index,
+        y=perspective_counts[status],
         name=status,
-        marker_color=status_color_map[status],
-        text=[global_counts[status]],
+        marker_color=color_map[status],
+        text=perspective_counts[status],
         textposition='auto'
     ))
-fig_global.update_layout(
-    title="Total KPI Status (Global)",
-    yaxis_title="Jumlah KPI",
-    xaxis_title="Status",
+
+fig_perspective.update_layout(
     barmode='stack',
-    plot_bgcolor=COLOR_WHITE,
-    paper_bgcolor=COLOR_WHITE,
-    font=dict(color=COLOR_BLUE, size=16),
-    margin=dict(l=20, r=20, t=40, b=20),
-    height=350
-)
-
-# ========== CHART TRAFFIC LIGHT PER PERSPECTIVE ==========
-perspectives = df['Perspective'].dropna().unique().tolist()
-perspective_counts = {p: get_status_counts(df[df['Perspective'] == p]) for p in perspectives}
-
-fig_persp = go.Figure()
-for status in ['Merah', 'Kuning', 'Hijau', 'Hitam']:
-    fig_persp.add_trace(go.Bar(
-        x=perspectives,
-        y=[perspective_counts[p][status] for p in perspectives],
-        name=status,
-        marker_color=status_color_map[status],
-        text=[perspective_counts[p][status] for p in perspectives],
-        textposition='auto'
-    ))
-fig_persp.update_layout(
-    barmode='stack',
-    title="KPI Status per Perspective",
     yaxis_title="Jumlah KPI",
-    xaxis_title="Perspective",
-    plot_bgcolor=COLOR_WHITE,
-    paper_bgcolor=COLOR_WHITE,
-    font=dict(color=COLOR_BLUE, size=16),
-    margin=dict(l=20, r=20, t=40, b=20),
-    height=400,
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    xaxis_title="Perspective"
 )
+st.plotly_chart(fig_perspective, use_container_width=True)
 
-# ========== DISPLAY CHARTS ==========
+# === Filter Perspective (2x2 tombol besar) ===
+st.markdown("### Filter Perspective (klik salah satu):")
+perspectives = df["Perspective"].unique()
+perspective_selection = None
+
 col1, col2 = st.columns(2)
 with col1:
-    st.plotly_chart(fig_global, use_container_width=True)
+    for p in perspectives[:2]:
+        if st.button(p, key=f"btn_{p}", help=f"Filter by {p}", use_container_width=True):
+            perspective_selection = p
 with col2:
-    st.plotly_chart(fig_persp, use_container_width=True)
+    for p in perspectives[2:]:
+        if st.button(p, key=f"btn_{p}_2", help=f"Filter by {p}", use_container_width=True):
+            perspective_selection = p
 
-# ========== FILTER PERSPECTIVE (TOMBOL 2x2) ==========
-st.markdown("<h3 style='color:#b42020;'>Filter Perspective (klik salah satu):</h3>", unsafe_allow_html=True)
+if perspective_selection:
+    st.markdown(f"### Daftar KPI untuk Perspective: {perspective_selection}")
+    df_filtered = df[df["Perspective"] == perspective_selection]
+    st.dataframe(df_filtered)
 
-# CSS styling tombol besar
-st.markdown("""
-<style>
-button.persp-btn {
-    width: 100%;
-    height: 80px;
-    font-size: 1.5rem;
-    color: white;
-    background-color: #0f098e;
-    border-radius: 12px;
-    border: 2px solid #b42020;
-    margin-bottom: 12px;
-    cursor: pointer;
-}
-button.persp-btn:hover {
-    background-color: #b42020;
-}
-</style>
-""", unsafe_allow_html=True)
+    st.markdown("### Pilih KPI untuk lihat detail chart:")
+    kpi_options = df_filtered[["Kode KPI", "KPI"]].drop_duplicates()
+    for _, row in kpi_options.iterrows():
+        if st.button(f"Show Chart {row['Kode KPI']}"):
+            st.markdown(f"**Detail KPI: {row['Kode KPI']} - {row['KPI']}**")
+            kpi_data = df_filtered[df_filtered["Kode KPI"] == row["Kode KPI"]]
 
-cols = st.columns(2)
+            categories = ["Actual Jan", "Target Feb", "Actual Feb"]
+            actual_values = [kpi_data[c].values[0] for c in categories]
+            target_line = float(kpi_data["Target Tahunan"].values[0])
+            months = categories
 
-if 'selected_persp' not in st.session_state:
-    st.session_state.selected_persp = perspectives[0]
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=months, y=actual_values, mode='lines+markers', name='Kinerja Bulanan', line=dict(color="#0f098e")))
+            fig.add_trace(go.Scatter(x=months, y=[target_line]*len(months), mode='lines', name='Target Tahunan', line=dict(color='green', dash='dash')))
 
-def select_persp(p):
-    st.session_state.selected_persp = p
-
-for i, p in enumerate(perspectives):
-    col = cols[i % 2]
-    is_selected = (st.session_state.selected_persp == p)
-    btn_label = f"✔ {p}" if is_selected else p
-    if col.button(btn_label, key=p, on_click=select_persp, args=(p,), kwargs=None):
-        pass
-
-selected_perspective = st.session_state.selected_persp
-
-# ========== FILTER DATA BERDASARKAN PERSPECTIVE ==========
-filtered_df = df[df['Perspective'] == selected_perspective]
-
-# ========== TABEL KPI DENGAN CONDITIONAL FORMATTING ==========
-st.markdown(f"<h3 style='color:#b42020;'>Daftar KPI untuk Perspective: {selected_perspective}</h3>", unsafe_allow_html=True)
-
-def style_row(row):
-    if row['Status'] == 'Merah':
-        return ['background-color: #b42020; color: white;'] * len(row)
-    elif row['Status'] == 'Kuning':
-        return ['background-color: #ffe600; color: black;'] * len(row)
-    elif row['Status'] == 'Hijau':
-        return ['background-color: #1bb934; color: white;'] * len(row)
-    elif row['Status'] == 'Hitam':
-        return ['background-color: #222222; color: white;'] * len(row)
-    else:
-        return [''] * len(row)
-
-display_cols = ['Kode KPI', 'KPI', 'Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb', 'Measurement Type', 'Status']
-table_df = filtered_df[display_cols].copy()
-
-st.dataframe(table_df.style.apply(style_row, axis=1), use_container_width=True)
-
-# ========== SHOW CHART PER KPI ==========
-st.markdown("<h3 style='color:#b42020;'>Pilih KPI untuk lihat detail chart:</h3>", unsafe_allow_html=True)
-
-selected_kpi_code = None
-cols_per_row = 4
-
-for i in range(0, len(table_df), cols_per_row):
-    cols_buttons = st.columns(cols_per_row)
-    for j, row in enumerate(table_df.iloc[i:i+cols_per_row].itertuples()):
-        if cols_buttons[j].button(f"Show Chart {row._1}", key=f"btn_{row._1}"):
-            selected_kpi_code = row._1
-
-if selected_kpi_code:
-    kpi_row = filtered_df[filtered_df['Kode KPI'] == selected_kpi_code].iloc[0]
-    actual_feb = kpi_row['Actual Feb']
-    if pd.isna(actual_feb) or str(actual_feb).strip().upper() == 'NA':
-        st.info("Belum ada data yang tersedia untuk KPI ini.")
-    else:
-        fig_detail = go.Figure()
-
-        # Garis Target Tahunan (horizontal)
-        fig_detail.add_trace(go.Scatter(
-            x=['Jan', 'Feb'],
-            y=[kpi_row['Target Tahunan']] * 2,
-            mode='lines',
-            name='Target Tahunan',
-            line=dict(color=COLOR_GREEN, dash='dash')
-        ))
-
-        # Garis perkembangan data aktual dan target bulan
-        fig_detail.add_trace(go.Scatter(
-            x=['Actual Jan', 'Target Feb', 'Actual Feb'],
-            y=[kpi_row['Actual Jan'], kpi_row['Target Feb'], kpi_row['Actual Feb']],
-            mode='lines+markers',
-            name='Kinerja Bulanan',
-            line=dict(color=COLOR_BLUE, width=3)
-        ))
-
-        fig_detail.update_layout(
-            title=f"Detail KPI: {kpi_row['Kode KPI']} - {kpi_row['KPI']}",
-            yaxis_title="Nilai",
-            xaxis_title="Kategori",
-            height=400,
-            plot_bgcolor=COLOR_WHITE,
-            paper_bgcolor=COLOR_WHITE,
-            font=dict(color=COLOR_BLUE)
-        )
-        st.plotly_chart(fig_detail, use_container_width=True)
+            fig.update_layout(yaxis_title="Nilai", xaxis_title="Kategori")
+            st.plotly_chart(fig, use_container_width=True)
