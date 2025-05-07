@@ -18,15 +18,15 @@ color_dict = {
 }
 
 # Load data
-df = pd.read_csv("Dashboard 7.csv")  # Ganti di sini
+df = pd.read_csv("Dashboard 7.csv")
 
 # Tambahkan kolom Status
 def calculate_status(row):
-    if str(row['%Achv']).lower() == 'n/a':
+    if str(row['Achv Feb']).lower() == 'n/a':
         return 'Hitam'
-    elif float(row['%Achv']) < 70:
+    elif float(row['Achv Feb']) < 70:
         return 'Merah'
-    elif float(row['%Achv']) <= 100:
+    elif float(row['Achv Feb']) <= 100:
         return 'Kuning'
     else:
         return 'Hijau'
@@ -104,7 +104,7 @@ with col2:
 if selected_perspective:
     st.markdown(f"### Daftar KPI: {selected_perspective}")
     filtered_df = df[df['Perspective'] == selected_perspective]
-    st.dataframe(filtered_df[['Kode KPI', 'KPI', '%Achv', 'Status']])
+    st.dataframe(filtered_df[['Kode KPI', 'KPI', 'Achv Feb', 'Status']])
 
     st.markdown("### Pilih KPI untuk melihat detail:")
     selected_kpi_code = st.selectbox(
@@ -142,7 +142,7 @@ if selected_perspective:
                 title=f"Detail KPI: {kpi_row['Kode KPI']} - {kpi_row['KPI']}",
                 yaxis_title="Nilai",
                 xaxis=dict(
-                    tickvals=[],  # Hapus label Jan/Feb
+                    tickvals=[],
                     showgrid=False
                 ),
                 height=400,
