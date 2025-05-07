@@ -47,8 +47,7 @@ status_color_map = {
 }
 
 # Urutan status (Merah paling atas, Hitam paling bawah)
-status_order = ['Hitam', 'Hijau', 'Kuning', 'Merah']
-
+status_order = ['Merah', 'Kuning', 'Hijau', 'Hitam']
 
 # ========== CHART TRAFFIC LIGHT GLOBAL ==========
 def get_status_counts(data):
@@ -88,7 +87,7 @@ perspectives = df['Perspective'].dropna().unique().tolist()
 perspective_counts = {p: get_status_counts(df[df['Perspective'] == p]) for p in perspectives}
 
 fig_persp = go.Figure()
-for status in ['Merah', 'Kuning', 'Hijau', 'Hitam']:
+for status in status_order:
     fig_persp.add_trace(go.Bar(
         x=perspectives,
         y=[perspective_counts[p][status] for p in perspectives],
@@ -160,9 +159,20 @@ selected_perspective = st.session_state.selected_persp
 # ========== FILTER DATA BERDASARKAN PERSPECTIVE ==========
 filtered_df = df[df['Perspective'] == selected_perspective]
 
-# ========== TABEL KPI DENGAN CONDITIONAL FORMATTING ==========
-st.markdown(f"<h3 style='color:#b42020;'>Daftar KPI untuk Perspective: {selected_perspective}</h3>", unsafe_allow_html=True)
+# ========== FORMAT ANGKA DI TABEL ==========
+# Batasi angka desimal pada kolom numerik
+def format_numeric_columns(df_in):
+    df_out = df_in.copy()
+    for col in ['Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb']:
+        if col in df_out.columns:
+            df_out[col] = pd.to_numeric(df_out[col], errors='coerce').round(2)
+    return df_out
 
+table_df = format_numeric_columns(filtered_df[[
+    'Kode KPI', 'KPI', 'Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb', 'Measurement Type', 'Status'
+]]).copy()
+
+# ========== TABEL KPI DENGAN CONDITIONAL FORMATTING ==========
 def style_row(row):
     if row['Status'] == 'Merah':
         return ['background-color: #b42020; color: white;'] * len(row)
@@ -175,9 +185,7 @@ def style_row(row):
     else:
         return [''] * len(row)
 
-display_cols = ['Kode KPI', 'KPI', 'Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb', 'Measurement Type', 'Status']
-table_df = filtered_df[display_cols].copy()
-
+st.markdown(f"<h3 style='color:#b42020;'>Daftar KPI untuk Perspective: {selected_perspective}</h3>", unsafe_allow_html=True)
 st.dataframe(table_df.style.apply(style_row, axis=1), use_container_width=True)
 
 # ========== SHOW CHART PER KPI ==========
@@ -189,8 +197,8 @@ cols_per_row = 4
 for i in range(0, len(table_df), cols_per_row):
     cols_buttons = st.columns(cols_per_row)
     for j, row in enumerate(table_df.iloc[i:i+cols_per_row].itertuples()):
-        if cols_buttons[j].button(f"Show Chart {row._1}", key=f"btn_{row._1}"):
-            selected_kpi_code = row._1
+        if cols_buttons[j].button(f"Show Chart {row.Kode_KPI}", key=f"btn_{row.Kode_KPI}"):
+            selected_kpi_code = row.Kode_KPI
 
 if selected_kpi_code:
     kpi_row = filtered_df[filtered_df['Kode KPI'] == selected_kpi_code].iloc[0]
@@ -200,16 +208,15 @@ if selected_kpi_code:
     else:
         fig_detail = go.Figure()
 
-        # Siapkan data
-        x_data = ['Actual Jan', 'Actual Feb']  # Modify if you have more months
-        y_data = [kpi_row[x] for x in x_data]
-        x_clean = [x.replace("Actual ", "") for x in x_data]
+        # Siapkan data bulan
+        x_data = ['Jan', 'Feb']
+        y_data = [kpi_row['Actual Jan'], kpi_row['Actual Feb']]
 
-        # Target tahunan
+        # Garis target tahunan
         target_tahunan = kpi_row['Target Tahunan']
         target_line = go.Scatter(
-            x=x_clean,
-            y=[target_tahunan] * len(x_clean),
+            x=x_data,
+            y=[target_tahunan] * len(x_data),
             mode='lines',
             name='Target Tahunan',
             line=dict(color='green', dash='dash')
@@ -217,18 +224,19 @@ if selected_kpi_code:
 
         # Garis aktual bulanan
         actual_line = go.Scatter(
-            x=x_clean,
+            x=x_data,
             y=y_data,
             mode='lines+markers',
             name='Kinerja Bulanan',
             line=dict(color='#0f098e')
         )
 
-        fig = go.Figure(data=[target_line, actual_line])
-        fig.update_layout(
+        fig_detail.add_traces([target_line, actual_line])
+        fig_detail.update_layout(
             xaxis_title='Bulan',
             yaxis_title='Nilai',
-            xaxis=dict(showticklabels=True),  # Tampilkan label bulan
-            height=400
+            xaxis=dict(showticklabels=True),
+            height=400,
+            plot_bgcolor='white'
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig_detail, use_container_width=True)
