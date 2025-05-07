@@ -17,7 +17,6 @@ for col in required_cols:
         st.error(f"Kolom '{col}' tidak ditemukan di data.")
         st.stop()
 
-# Konversi Achv Feb ke numerik, N/A jadi NaN
 df['Achv Feb Num'] = pd.to_numeric(df['Achv Feb'].str.replace('%','').str.replace(',','.'), errors='coerce')
 
 def get_status(achv):
@@ -177,17 +176,17 @@ table_df = filtered_df[display_cols].copy()
 
 st.dataframe(table_df.style.apply(style_row, axis=1), use_container_width=True)
 
-# ========== SHOW CHART PER KPI DENGAN TOMBOL DI SAMPING TABEL ==========
+# ========== SHOW CHART PER KPI ==========
 st.markdown("<h3 style='color:#b42020;'>Pilih KPI untuk lihat detail chart:</h3>", unsafe_allow_html=True)
 
-# Buat tombol di samping tabel untuk setiap KPI
 selected_kpi_code = None
-cols_buttons = st.columns(len(table_df))
+cols_per_row = 4
 
-for idx, row in table_df.iterrows():
-    col = cols_buttons[idx % len(cols_buttons)]
-    if col.button(f"Show Chart {row['Kode KPI']}", key=f"btn_{row['Kode KPI']}"):
-        selected_kpi_code = row['Kode KPI']
+for i in range(0, len(table_df), cols_per_row):
+    cols_buttons = st.columns(cols_per_row)
+    for j, row in enumerate(table_df.iloc[i:i+cols_per_row].itertuples()):
+        if cols_buttons[j].button(f"Show Chart {row._1}", key=f"btn_{row._1}"):
+            selected_kpi_code = row._1
 
 if selected_kpi_code:
     kpi_row = filtered_df[filtered_df['Kode KPI'] == selected_kpi_code].iloc[0]
@@ -196,17 +195,32 @@ if selected_kpi_code:
         st.info("Belum ada data yang tersedia untuk KPI ini.")
     else:
         fig_detail = go.Figure()
+
+        # Garis Target Tahunan (horizontal)
         fig_detail.add_trace(go.Scatter(
-            x=['Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb'],
-            y=[kpi_row['Target Tahunan'], kpi_row['Actual Jan'], kpi_row['Target Feb'], kpi_row['Actual Feb']],
+            x=['Jan', 'Feb'],
+            y=[kpi_row['Target Tahunan']] * 2,
+            mode='lines',
+            name='Target Tahunan',
+            line=dict(color=COLOR_GREEN, dash='dash')
+        ))
+
+        # Garis perkembangan data aktual dan target bulan
+        fig_detail.add_trace(go.Scatter(
+            x=['Actual Jan', 'Target Feb', 'Actual Feb'],
+            y=[kpi_row['Actual Jan'], kpi_row['Target Feb'], kpi_row['Actual Feb']],
             mode='lines+markers',
+            name='Kinerja Bulanan',
             line=dict(color=COLOR_BLUE, width=3)
         ))
+
         fig_detail.update_layout(
             title=f"Detail KPI: {kpi_row['Kode KPI']} - {kpi_row['KPI']}",
             yaxis_title="Nilai",
             xaxis_title="Kategori",
             height=400,
-            plot_bgcolor=COLOR_WHITE
+            plot_bgcolor=COLOR_WHITE,
+            paper_bgcolor=COLOR_WHITE,
+            font=dict(color=COLOR_BLUE)
         )
         st.plotly_chart(fig_detail, use_container_width=True)
