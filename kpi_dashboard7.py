@@ -1,173 +1,161 @@
 import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
 import streamlit as st
-import base64
-import io
+import plotly.graph_objects as go
+import os
 
 # ========== PAGE CONFIG ==========
 st.set_page_config(layout="wide", page_title="KPI Dashboard")
 
-# ========== SAMPLE DATA ==========
-np.random.seed(42)
-data = {
-    'KPI Name': ['Revenue Growth', 'Customer Satisfaction', 'Efficiency Ratio', 'Market Share', 'Employee Engagement', 'Cost Reduction', 'Quality Index', 'Customer Retention'],
-    'Perspective': ['Financial', 'Customer', 'Internal Process', 'Financial', 'Learning & Growth', 'Financial', 'Internal Process', 'Customer'],
-    'Trend Data': [
-        np.random.randint(70, 120, size=12),
-        np.random.randint(60, 110, size=12),
-        np.random.randint(80, 130, size=12),
-        np.random.randint(75, 125, size=12),
-        np.random.randint(65, 115, size=12),
-        np.random.randint(70, 120, size=12),
-        np.random.randint(85, 135, size=12),
-        np.random.randint(60, 110, size=12)
-    ],
-    'Achv Feb': [105, 88, 115, 98, 90, 110, 120, 85]
-}
-df = pd.DataFrame(data)
+# ========== LOAD DATA ==========
+file_path = "Dashboard 7.csv"
+if not os.path.exists(file_path):
+    st.error(f"File {file_path} tidak ditemukan.")
+    st.stop()
 
-# ========== FUNCTION TO GENERATE SPARKLINE IMAGE (BASE64) ==========
-def generate_sparkline(trend_data, color='#0f098e'):
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(2, 0.5))
-    ax.plot(trend_data, color=color, linewidth=2)
-    ax.axis('off')
-    fig.patch.set_alpha(0)
-    plt.tight_layout(pad=0)
-    buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=100, bbox_inches='tight', pad_inches=0)
-    buf.seek(0)
-    image_base64 = base64.b64encode(buf.read()).decode("utf-8")
-    plt.close(fig)
-    return f"<img src='data:image/png;base64,{image_base64}'/>"
+try:
+    df = pd.read_csv(file_path)
+except Exception as e:
+    st.error(f"Gagal membaca file: {e}")
+    st.stop()
 
-df['Sparkline'] = df['Trend Data'].apply(lambda x: generate_sparkline(x, color='#0f098e'))
+# Pastikan kolom penting ada
+required_cols = ['Perspective', 'KPI', 'Kode KPI', 'Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb', 'Achv Feb']
+for col in required_cols:
+    if col not in df.columns:
+        st.error(f"Kolom '{col}' tidak ditemukan di data.")
+        st.stop()
 
-# ========== CUSTOM CSS STYLING ==========
-st.markdown("""
-    <style>
-    .kpi-card {
-        background-color: #0f098e;
-        color: white;
-        padding: 15px;
-        border-radius: 10px;
-        width: 250px;
-        display: inline-block;
-        margin: 10px 10px 10px 0;
-        vertical-align: top;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        cursor: pointer;
-        user-select: none;
-        transition: transform 0.1s ease-in-out;
-    }
-    .kpi-card:hover {
-        transform: scale(1.05);
-    }
-    .kpi-title {
-        font-size: 18px;
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-    .kpi-value {
-        font-size: 28px;
-        font-weight: bold;
-        color: #b42020;
-        margin-bottom: 5px;
-    }
-    .sparkline {
-        margin-top: 5px;
-    }
-    .container {
-        white-space: nowrap;
-        overflow-x: auto;
-        padding-bottom: 10px;
-    }
-    .btn-perspective {
-        background-color: #0f098e;
-        color: white;
-        border: none;
-        padding: 15px 20px;
-        margin: 10px;
-        border-radius: 10px;
-        font-size: 16px;
-        font-weight: bold;
-        cursor: pointer;
-        width: 100%;
-        transition: background-color 0.3s ease;
-    }
-    .btn-perspective:hover {
-        background-color: #b42020;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# ========== Fungsi untuk menentukan status warna berdasarkan Achv Feb ==========
+def get_status_color(achv):
+    try:
+        achv = float(achv)
+        if achv > 99:
+            return 'Hijau'
+        elif 70 <= achv <= 99:
+            return 'Kuning'
+        elif achv < 70:
+            return 'Merah'
+        else:
+            return 'Hitam'
+    except:
+        return 'Hitam'  # Untuk N/A atau data tidak valid
 
-st.title("Dashboard KPI")
+df['Status'] = df['Achv Feb'].apply(get_status_color)
 
-# ========== BUTTONS PERSPECTIVE 2x2 ==========
-perspectives = ['Financial', 'Customer', 'Internal Process', 'Learning & Growth']
+# ========== Hitung jumlah KPI per status global ==========
+status_order = ['Merah', 'Kuning', 'Hijau', 'Hitam']
+status_colors = {'Merah':'#d62728', 'Kuning':'#ffbb33', 'Hijau':'#2ca02c', 'Hitam':'#000000'}
 
-st.markdown("### Pilih Perspective KPI:")
+global_status_counts = df['Status'].value_counts().reindex(status_order, fill_value=0)
 
-cols = st.columns(2)
-for i, perspective in enumerate(perspectives):
-    with cols[i % 2]:
-        if st.button(perspective, key=f"btn_{perspective}"):
-            st.session_state['selected_perspective'] = perspective
+# ========== Hitung jumlah KPI per status per perspective ==========
+perspective_status_counts = df.groupby(['Perspective', 'Status']).size().unstack(fill_value=0).reindex(columns=status_order, fill_value=0)
 
-# Default selected perspective jika belum ada
-if 'selected_perspective' not in st.session_state:
-    st.session_state['selected_perspective'] = perspectives[0]
-
-selected_perspective = st.session_state['selected_perspective']
-
-st.markdown(f"### KPI untuk Perspective: **{selected_perspective}**")
-
-# Filter KPI berdasarkan perspective yang dipilih
-df_filtered = df[df['Perspective'] == selected_perspective]
-
-# Tampilkan KPI cards dengan sparkline
-st.markdown('<div class="container">', unsafe_allow_html=True)
-for idx, row in df_filtered.iterrows():
-    card_html = f"""
-    <div class="kpi-card" id="card-{idx}">
-        <div class="kpi-title">{row['KPI Name']}</div>
-        <div class="kpi-value">{row['Achv Feb']}</div>
-        <div class="sparkline">{row['Sparkline']}</div>
-    </div>
-    """
-    st.markdown(card_html, unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# ========== DETAIL TREND PLOT ==========
-if len(df_filtered) > 0:
-    selected_kpi = df_filtered.iloc[0]  # default pilih KPI pertama di list
-
-    # Jika user klik kartu, kamu bisa tambahkan interaksi lebih lanjut (misal pakai st.button atau st.radio)
-    # Untuk contoh ini, kita tampilkan detail trend KPI pertama saja
-
-    st.subheader(f"Detail Trend untuk {selected_kpi['KPI Name']}")
-
-    trend = selected_kpi['Trend Data']
-    x = list(range(1, len(trend) + 1))
-
-    fig = go.Figure(go.Scatter(
-        x=x,
-        y=trend,
-        mode='lines+markers+text',
-        text=trend,
-        textposition='top center',
-        line=dict(color='#0f098e', width=3),
-        marker=dict(size=8, color='#b42020')
+# ========== Chart Traffic Light Global ==========
+fig_global = go.Figure()
+for status in status_order:
+    fig_global.add_trace(go.Bar(
+        x=[status],
+        y=[global_status_counts[status]],
+        name=status,
+        marker_color=status_colors[status],
+        text=[global_status_counts[status]],
+        textposition='auto'
     ))
 
-    fig.update_layout(
-        xaxis_title="Bulan",
-        yaxis_title="Nilai",
-        margin=dict(l=40, r=40, t=40, b=40),
-        height=400
-    )
+fig_global.update_layout(
+    title="Total KPI Status (Global)",
+    yaxis_title="Jumlah KPI",
+    xaxis_title="Status",
+    showlegend=False,
+    plot_bgcolor='white',
+    height=300
+)
 
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("Tidak ada KPI untuk perspective ini.")
+# ========== Chart Traffic Light Per Perspective ==========
+fig_persp = go.Figure()
+for status in status_order:
+    fig_persp.add_trace(go.Bar(
+        x=perspective_status_counts.index,
+        y=perspective_status_counts[status],
+        name=status,
+        marker_color=status_colors[status],
+        text=perspective_status_counts[status],
+        textposition='auto'
+    ))
+
+fig_persp.update_layout(
+    barmode='stack',
+    title="KPI Status per Perspective",
+    yaxis_title="Jumlah KPI",
+    xaxis_title="Perspective",
+    plot_bgcolor='white',
+    height=400
+)
+
+# ========== Sidebar Multi-select Perspective ==========
+st.sidebar.header("Filter Perspective")
+perspectives = df['Perspective'].dropna().unique().tolist()
+selected_perspectives = st.sidebar.multiselect("Pilih Perspective (bisa lebih dari satu):", options=perspectives, default=perspectives)
+
+if not selected_perspectives:
+    st.warning("Silakan pilih minimal satu perspective.")
+    st.stop()
+
+# ========== Filter data berdasarkan perspective terpilih ==========
+filtered_df = df[df['Perspective'].isin(selected_perspectives)].reset_index(drop=True)
+
+# ========== Tampilkan Chart di bagian atas halaman ==========
+st.title("📊 Dashboard KPI dengan Traffic Light Status")
+st.plotly_chart(fig_global, use_container_width=True)
+st.plotly_chart(fig_persp, use_container_width=True)
+
+# ========== Tampilkan Tabel KPI ==========
+st.markdown(f"### Daftar KPI untuk Perspective: {', '.join(selected_perspectives)}")
+
+# Fungsi untuk styling baris tabel berdasarkan status
+def highlight_row(row):
+    color = ''
+    if row['Status'] == 'Hijau':
+        color = 'background-color: #d4edda'  # hijau muda
+    elif row['Status'] == 'Kuning':
+        color = 'background-color: #fff3cd'  # kuning muda
+    elif row['Status'] == 'Merah':
+        color = 'background-color: #f8d7da'  # merah muda
+    else:
+        color = ''  # default
+    return [color]*len(row)
+
+display_cols = ['Kode KPI', 'KPI', 'Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb', 'Achv Feb', 'Status']
+table_df = filtered_df[display_cols]
+
+# Buat container untuk tabel dan tombol show chart per baris
+st.write("Klik tombol 'Show Chart' di sebelah kanan untuk melihat detail KPI.")
+
+# Tampilkan tabel dan tombol "Show Chart" per baris
+for idx, row in table_df.iterrows():
+    cols = st.columns([8, 1])  # Lebar kolom: tabel 8, tombol 1
+    with cols[0]:
+        st.write(f"**{row['Kode KPI']} - {row['KPI']}**  \n"
+                 f"Target Tahunan: {row['Target Tahunan']}  \n"
+                 f"Actual Jan: {row['Actual Jan']}  \n"
+                 f"Target Feb: {row['Target Feb']}  \n"
+                 f"Actual Feb: {row['Actual Feb']}  \n"
+                 f"Achv Feb: {row['Achv Feb']}%  \n"
+                 f"Status: {row['Status']}")
+    with cols[1]:
+        if st.button(f"Show Chart {idx}", key=f"btn_{idx}"):
+            # Tampilkan chart detail KPI
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=['Target Jan', 'Actual Jan', 'Target Feb', 'Actual Feb'],
+                y=[row['Target Tahunan'], row['Actual Jan'], row['Target Feb'], row['Actual Feb']],
+                marker_color=['#636EFA', '#EF553B', '#636EFA', '#EF553B']
+            ))
+            fig.update_layout(
+                title=f"Detail KPI: {row['Kode KPI']} - {row['KPI']}",
+                yaxis_title="Nilai",
+                xaxis_title="Bulan",
+                height=400
+            )
+            st.plotly_chart(fig, use_container_width=True)
