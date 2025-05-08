@@ -1,16 +1,15 @@
-# pip install streamlit plotly pandas
-
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
-# ===== CONFIG =====
+# ========== PAGE CONFIG ==========
 st.set_page_config(layout="wide", page_title="KPI Dashboard")
 
-# ===== LOAD DATA =====
+# ========== LOAD DATA ==========
 file_path = "Dashboard 7.csv"
 df = pd.read_csv(file_path)
 
+# ========== DATA PREPARATION ==========
 required_cols = ['Perspective', 'Kode KPI', 'KPI', 'Target Tahunan', 'Measurement Type',
                  'Target Jan', 'Actual Jan', 'Achv Jan', 'Target Feb', 'Actual Feb', 'Achv Feb']
 for col in required_cols:
@@ -18,7 +17,7 @@ for col in required_cols:
         st.error(f"Kolom '{col}' tidak ditemukan di data.")
         st.stop()
 
-df['Achv Feb Num'] = pd.to_numeric(df['Achv Feb'].str.replace('%', '').str.replace(',', '.'), errors='coerce')
+df['Achv Feb Num'] = pd.to_numeric(df['Achv Feb'].str.replace('%','').str.replace(',','.'), errors='coerce')
 
 def get_status(achv):
     if pd.isna(achv):
@@ -32,13 +31,13 @@ def get_status(achv):
 
 df['Status'] = df['Achv Feb Num'].apply(get_status)
 
-# ===== COLORS =====
+# ========== WARNA ==========
 COLOR_RED = "#b42020"
-COLOR_YELLOW = "#ffe600"
-COLOR_GREEN = "#1bb934"
-COLOR_BLACK = "#222222"
 COLOR_BLUE = "#0f098e"
 COLOR_WHITE = "#ffffff"
+COLOR_GREEN = "#1bb934"
+COLOR_YELLOW = "#ffe600"
+COLOR_BLACK = "#222222"
 
 status_color_map = {
     "Merah": COLOR_RED,
@@ -46,11 +45,19 @@ status_color_map = {
     "Hijau": COLOR_GREEN,
     "Hitam": COLOR_BLACK
 }
-status_order = ['Merah', 'Kuning', 'Hijau', 'Hitam']
 
-# ===== COUNT PER STATUS =====
+# Urutan status (Merah paling atas, Hitam paling bawah)
+status_order = ['Hitam', 'Hijau', 'Kuning', 'Merah']
+
+
+# ========== CHART TRAFFIC LIGHT GLOBAL ==========
 def get_status_counts(data):
-    return {status: (data['Status'] == status).sum() for status in status_order}
+    return {
+        "Merah": (data['Status'] == "Merah").sum(),
+        "Kuning": (data['Status'] == "Kuning").sum(),
+        "Hijau": (data['Status'] == "Hijau").sum(),
+        "Hitam": (data['Status'] == "Hitam").sum()
+    }
 
 global_counts = get_status_counts(df)
 
@@ -66,19 +73,36 @@ for status in status_order:
     ))
 fig_global.update_layout(
     title="Total KPI Status (Global)",
+    yaxis_title="Jumlah KPI",
+    xaxis_title="Status",
     barmode='stack',
     plot_bgcolor=COLOR_WHITE,
     paper_bgcolor=COLOR_WHITE,
     font=dict(color=COLOR_BLUE, size=16),
+    margin=dict(l=20, r=20, t=40, b=20),
     height=350
 )
 
-# ===== PER PERSPECTIVE =====
+# Drilldown chart saat klik bar
+click_data = st.session_state.get("click_data", None)
+clicked = st.plotly_chart(fig_global, use_container_width=True)
+
+if clicked and clicked['points']:
+    selected_status = clicked['points'][0]['x']
+    st.session_state.click_data = selected_status
+
+if 'click_data' in st.session_state:
+    selected_status = st.session_state.click_data
+    st.markdown(f"### KPI dengan Status: {selected_status}")
+    st.dataframe(df[df['Status'] == selected_status][display_cols])
+
+
+# ========== CHART TRAFFIC LIGHT PER PERSPECTIVE ==========
 perspectives = df['Perspective'].dropna().unique().tolist()
 perspective_counts = {p: get_status_counts(df[df['Perspective'] == p]) for p in perspectives}
 
 fig_persp = go.Figure()
-for status in status_order:
+for status in ['Merah', 'Kuning', 'Hijau', 'Hitam']:
     fig_persp.add_trace(go.Bar(
         x=perspectives,
         y=[perspective_counts[p][status] for p in perspectives],
@@ -88,53 +112,161 @@ for status in status_order:
         textposition='auto'
     ))
 fig_persp.update_layout(
-    title="KPI Status per Perspective",
     barmode='stack',
+    title="KPI Status per Perspective",
+    yaxis_title="Jumlah KPI",
+    xaxis_title="Perspective",
     plot_bgcolor=COLOR_WHITE,
     paper_bgcolor=COLOR_WHITE,
     font=dict(color=COLOR_BLUE, size=16),
-    height=400
+    margin=dict(l=20, r=20, t=40, b=20),
+    height=400,
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
 )
 
-# ===== DISPLAY CHARTS =====
+# ========== DISPLAY CHARTS ==========
 col1, col2 = st.columns(2)
 with col1:
     st.plotly_chart(fig_global, use_container_width=True)
 with col2:
     st.plotly_chart(fig_persp, use_container_width=True)
 
-# ===== FILTER PER STATUS =====
-st.subheader("Filter Berdasarkan Warna Status:")
-selected_status = st.selectbox("Pilih status warna:", status_order)
+# ========== FILTER PERSPECTIVE (TOMBOL 2x2) ==========
+st.markdown("<h3 style='color:#b42020;'>Filter Perspective (klik salah satu):</h3>", unsafe_allow_html=True)
 
-filtered_by_status = df[df['Status'] == selected_status]
-st.dataframe(filtered_by_status[['Kode KPI', 'KPI', 'Status']])
+# CSS styling tombol besar
+st.markdown("""
+<style>
+button.persp-btn {
+    width: 100%;
+    height: 80px;
+    font-size: 1.5rem;
+    color: white;
+    background-color: #0f098e;
+    border-radius: 12px;
+    border: 2px solid #b42020;
+    margin-bottom: 12px;
+    cursor: pointer;
+}
+button.persp-btn:hover {
+    background-color: #b42020;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# ===== FILTER PERSPECTIVE =====
-st.subheader("Filter Berdasarkan Perspective:")
-selected_perspective = st.selectbox("Pilih Perspective:", perspectives)
+cols = st.columns(2)
+
+if 'selected_persp' not in st.session_state:
+    st.session_state.selected_persp = perspectives[0]
+
+def select_persp(p):
+    st.session_state.selected_persp = p
+
+for i, p in enumerate(perspectives):
+    col = cols[i % 2]
+    is_selected = (st.session_state.selected_persp == p)
+    btn_label = f"✔ {p}" if is_selected else p
+    if col.button(btn_label, key=p, on_click=select_persp, args=(p,), kwargs=None):
+        pass
+
+selected_perspective = st.session_state.selected_persp
+
+# ========== FILTER DATA BERDASARKAN PERSPECTIVE ==========
 filtered_df = df[df['Perspective'] == selected_perspective]
 
-# ===== TREND INSIGHT & TABEL =====
+# ========== TABEL KPI DENGAN CONDITIONAL FORMATTING ==========
+st.markdown(f"<h3 style='color:#b42020;'>Daftar KPI untuk Perspective: {selected_perspective}</h3>", unsafe_allow_html=True)
+
+def style_row(row):
+    if row['Status'] == 'Merah':
+        return ['background-color: #b42020; color: white;'] * len(row)
+    elif row['Status'] == 'Kuning':
+        return ['background-color: #ffe600; color: black;'] * len(row)
+    elif row['Status'] == 'Hijau':
+        return ['background-color: #1bb934; color: white;'] * len(row)
+    elif row['Status'] == 'Hitam':
+        return ['background-color: #222222; color: white;'] * len(row)
+    else:
+        return [''] * len(row)
+
+display_cols = ['Kode KPI', 'KPI', 'Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb', 'Measurement Type', 'Status', 'Trend Insight']
+
+table_df = filtered_df[display_cols].copy()
+
+st.dataframe(table_df.style.apply(style_row, axis=1), use_container_width=True)
+
+table_df["Trend Insight"] = filtered_df.apply(generate_trend_insight, axis=1)
+
+# Auto trend analysis per KPI
 def generate_trend_insight(row):
     actual_cols = [col for col in df.columns if col.startswith("Actual")]
     actuals = pd.to_numeric(row[actual_cols].replace('NA', None), errors='coerce').tolist()
-    recent_values = [v for v in actuals if pd.notna(v)][-3:]
+
+    # Deteksi tren 2 bulan terakhir
+    recent_values = [v for v in actuals if pd.notna(v)][-3:]  # ambil 3 terakhir
+    insight = ""
     if len(recent_values) >= 2:
         if all(x > y for x, y in zip(recent_values[1:], recent_values[:-1])):
-            return "📈 Naik 2 bulan"
+            insight = "📈 Naik 2 bulan berturut-turut"
         elif all(x < y for x, y in zip(recent_values[1:], recent_values[:-1])):
-            return "📉 Turun 2 bulan"
+            insight = "📉 Turun 2 bulan berturut-turut"
         elif recent_values[-1] > row['Target Tahunan']:
-            return "✅ Di atas target"
-    return ""
+            insight = "✅ Di atas target"
+    return insight
 
-filtered_df['Trend Insight'] = filtered_df.apply(generate_trend_insight, axis=1)
 
-def style_row(row):
-    color = status_color_map.get(row['Status'], "")
-    font_color = 'black' if row['Status'] == 'Kuning' else 'white'
-    return [f'background-color: {color}; color: {font_color};'] * len(row)
+# ========== SHOW CHART PER KPI ==========
+st.markdown("<h3 style='color:#b42020;'>Pilih KPI untuk lihat detail chart:</h3>", unsafe_allow_html=True)
 
-display_cols = ['Kode KPI', 'KPI', 'Target Tahunan', 'Actual Jan', 'Actual Feb', 'Measurement Type', 'Status', 'Trend Insight']
-st.dataframe(filtered_df[display_cols].style.apply(style_row, axis=1), use_container_width=True)
+selected_kpi_code = None
+cols_per_row = 4
+
+for i in range(0, len(table_df), cols_per_row):
+    cols_buttons = st.columns(cols_per_row)
+    for j, row in enumerate(table_df.iloc[i:i+cols_per_row].itertuples()):
+        if cols_buttons[j].button(f"Show Chart {row._1}", key=f"btn_{row._1}"):
+            selected_kpi_code = row._1
+
+if selected_kpi_code:
+    kpi_row = filtered_df[filtered_df['Kode KPI'] == selected_kpi_code].iloc[0]
+    actual_feb = kpi_row['Actual Feb']
+    if pd.isna(actual_feb) or str(actual_feb).strip().upper() == 'NA':
+        st.info("Belum ada data yang tersedia untuk KPI ini.")
+    else:
+        target_tahunan = kpi_row['Target Tahunan']
+        x_data = [col for col in df.columns if col.startswith('Actual')]
+        y_data = kpi_row[x_data].values.tolist()
+        x_clean = [col.replace('Actual ', '') for col in x_data]
+
+        target_line = go.Scatter(
+            x=x_clean,
+            y=[target_tahunan] * len(x_clean),
+            mode='lines',
+            name='Target Tahunan',
+            line=dict(color='green', dash='dash')
+        )
+
+        actual_line = go.Scatter(
+            x=x_clean,
+            y=y_data,
+            mode='lines+markers',
+            name='Kinerja Bulanan',
+            line=dict(color='#0f098e')
+        )
+
+        fig_detail = go.Figure(data=[target_line, actual_line])
+        fig_detail.update_layout(
+            xaxis_title='Bulan',
+            yaxis_title='Nilai',
+            height=400
+        )
+        st.plotly_chart(fig_detail, use_container_width=True)
+
+# ========== TAMBAHAN: LIST KPI STATUS HITAM ==========
+st.markdown("## 📌 Daftar KPI dengan Status Hitam (Data tidak lengkap)")
+df_hitam = df[df['Status'] == 'Hitam'][['Kode KPI', 'KPI']]
+
+if df_hitam.empty:
+    st.info("Tidak ada KPI dengan status Hitam.")
+else:
+    st.dataframe(df_hitam.reset_index(drop=True), use_container_width=True)
