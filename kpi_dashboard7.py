@@ -44,7 +44,7 @@ status_color_map = {
 }
  
 # Urutan status (Merah paling atas, Hitam paling bawah)
-status_order = ['Merah', 'Kuning', 'Hijau', 'Hitam']
+status_order = ['Hitam', 'Hijau', 'Kuning', 'Merah']
  
  
 # ========== CHART TRAFFIC LIGHT GLOBAL ==========
