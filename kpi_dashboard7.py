@@ -17,7 +17,11 @@ for col in required_cols:
         st.error(f"Kolom '{col}' tidak ditemukan di data.")
         st.stop()
 
-df['Achv Feb Num'] = pd.to_numeric(df['Achv Feb'].str.replace('%','').str.replace(',','.'), errors='coerce')
+# Convert 'Target Tahunan' to numeric, handling % and commas if any
+df['Target Tahunan'] = pd.to_numeric(df['Target Tahunan'].astype(str).str.replace('%','').str.replace(',','.'), errors='coerce')
+
+# Convert 'Achv Feb' to numeric after cleaning
+df['Achv Feb Num'] = pd.to_numeric(df['Achv Feb'].astype(str).str.replace('%','').str.replace(',','.'), errors='coerce')
 
 def get_status(achv):
     if pd.isna(achv):
@@ -34,6 +38,7 @@ df['Status'] = df['Achv Feb Num'].apply(get_status)
 # Auto trend analysis per KPI
 def generate_trend_insight(row):
     actual_cols = [col for col in df.columns if col.startswith("Actual")]
+    # Replace 'NA' strings with None and convert to numeric
     actuals = pd.to_numeric(row[actual_cols].replace('NA', None), errors='coerce').tolist()
     recent_values = [v for v in actuals if pd.notna(v)][-3:]
     insight = ""
@@ -193,12 +198,14 @@ cols_per_row = 4
 for i in range(0, len(table_df), cols_per_row):
     cols_buttons = st.columns(cols_per_row)
     for j, row in enumerate(table_df.iloc[i:i+cols_per_row].itertuples()):
-        if cols_buttons[j].button(f"Show Chart {row._1}", key=f"btn_{row._1}"):
-            selected_kpi_code = row._1
+        # Use row[1] to get 'Kode KPI' instead of row._1 for reliability
+        if cols_buttons[j].button(f"Show Chart {row[1]}", key=f"btn_{row[1]}"):
+            selected_kpi_code = row[1]
 
 if selected_kpi_code:
     kpi_row = filtered_df[filtered_df['Kode KPI'] == selected_kpi_code].iloc[0]
     actual_feb = kpi_row['Actual Feb']
+    # Check if actual_feb is NaN or 'NA' string
     if pd.isna(actual_feb) or str(actual_feb).strip().upper() == 'NA':
         st.info("Belum ada data yang tersedia untuk KPI ini.")
     else:
