@@ -83,7 +83,7 @@ fig_global.update_layout(
 perspectives = df['Perspective'].dropna().unique().tolist()
 perspective_counts = {p: get_status_counts(df[df['Perspective'] == p]) for p in perspectives}
 fig_persp = go.Figure()
-for status in ['Merah', 'Kuning', 'Hijau', 'Hitam']:
+for status in status_order:
     fig_persp.add_trace(go.Bar(
         x=perspectives,
         y=[perspective_counts[p][status] for p in perspectives],
