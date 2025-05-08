@@ -83,6 +83,20 @@ fig_global.update_layout(
     height=350
 )
 
+# Drilldown chart saat klik bar
+click_data = st.session_state.get("click_data", None)
+clicked = st.plotly_chart(fig_global, use_container_width=True)
+
+if clicked and clicked['points']:
+    selected_status = clicked['points'][0]['x']
+    st.session_state.click_data = selected_status
+
+if 'click_data' in st.session_state:
+    selected_status = st.session_state.click_data
+    st.markdown(f"### KPI dengan Status: {selected_status}")
+    st.dataframe(df[df['Status'] == selected_status][display_cols])
+
+
 # ========== CHART TRAFFIC LIGHT PER PERSPECTIVE ==========
 perspectives = df['Perspective'].dropna().unique().tolist()
 perspective_counts = {p: get_status_counts(df[df['Perspective'] == p]) for p in perspectives}
@@ -175,10 +189,31 @@ def style_row(row):
     else:
         return [''] * len(row)
 
-display_cols = ['Kode KPI', 'KPI', 'Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb', 'Measurement Type', 'Status']
+display_cols = ['Kode KPI', 'KPI', 'Target Tahunan', 'Actual Jan', 'Target Feb', 'Actual Feb', 'Measurement Type', 'Status', 'Trend Insight']
+
 table_df = filtered_df[display_cols].copy()
 
 st.dataframe(table_df.style.apply(style_row, axis=1), use_container_width=True)
+
+table_df["Trend Insight"] = filtered_df.apply(generate_trend_insight, axis=1)
+
+# Auto trend analysis per KPI
+def generate_trend_insight(row):
+    actual_cols = [col for col in df.columns if col.startswith("Actual")]
+    actuals = pd.to_numeric(row[actual_cols].replace('NA', None), errors='coerce').tolist()
+
+    # Deteksi tren 2 bulan terakhir
+    recent_values = [v for v in actuals if pd.notna(v)][-3:]  # ambil 3 terakhir
+    insight = ""
+    if len(recent_values) >= 2:
+        if all(x > y for x, y in zip(recent_values[1:], recent_values[:-1])):
+            insight = "📈 Naik 2 bulan berturut-turut"
+        elif all(x < y for x, y in zip(recent_values[1:], recent_values[:-1])):
+            insight = "📉 Turun 2 bulan berturut-turut"
+        elif recent_values[-1] > row['Target Tahunan']:
+            insight = "✅ Di atas target"
+    return insight
+
 
 # ========== SHOW CHART PER KPI ==========
 st.markdown("<h3 style='color:#b42020;'>Pilih KPI untuk lihat detail chart:</h3>", unsafe_allow_html=True)
