@@ -173,7 +173,6 @@ table_df = filtered_df[display_cols].copy()
 st.dataframe(table_df.style.apply(style_row, axis=1), use_container_width=True)
  
 # ========== SHOW CHART PER KPI ==========
-
 st.markdown("<h3 style='color:#b42020;'>Pilih KPI untuk lihat detail chart:</h3>", unsafe_allow_html=True)
 selected_kpi_code = None
 cols_per_row = 4
@@ -182,16 +181,21 @@ for i in range(0, len(table_df), cols_per_row):
     for j, row in enumerate(table_df.iloc[i:i+cols_per_row].itertuples()):
         if cols_buttons[j].button(f"Show Chart {row._1}", key=f"btn_{row._1}"):
             selected_kpi_code = row._1
+
 if selected_kpi_code:
     kpi_row = filtered_df[filtered_df['Kode KPI'] == selected_kpi_code].iloc[0]
     actual_feb = kpi_row['Actual Feb']
+    measurement_type = kpi_row['Measurement Type']  # Menyimpan measurement type
+
     if pd.isna(actual_feb) or str(actual_feb).strip().upper() == 'NA':
         st.info("Belum ada data yang tersedia untuk KPI ini.")
     else:
         target_tahunan = kpi_row['Target Tahunan']
+        target_feb = kpi_row['Target Feb']
         x_data = [col for col in df.columns if col.startswith('Actual')]
         y_data = kpi_row[x_data].values.tolist()
         x_clean = [col.replace('Actual ', '') for col in x_data]
+
         target_line = go.Scatter(
             x=x_clean,
             y=[target_tahunan] * len(x_clean),
@@ -207,8 +211,20 @@ if selected_kpi_code:
             name='Kinerja Bulanan',
             line=dict(color='#0f098e')
         )
- 
-        fig_detail = go.Figure(data=[target_line, actual_line])
+
+        # Menambahkan garis target Februari jika Measurement Type adalah 'SUM'
+        if measurement_type == 'SUM':
+            target_feb_line = go.Scatter(
+                x=x_clean,
+                y=[target_feb] * len(x_clean),
+                mode='lines',
+                name='Target Februari',
+                line=dict(color='red', dash='dash')  # Garis putus-putus dengan warna merah
+            )
+            fig_detail = go.Figure(data=[target_line, actual_line, target_feb_line])
+        else:
+            fig_detail = go.Figure(data=[target_line, actual_line])
+        
         fig_detail.update_layout(
             xaxis_title='Bulan',
             yaxis_title='Nilai',
@@ -216,6 +232,7 @@ if selected_kpi_code:
         )
 
         st.plotly_chart(fig_detail, use_container_width=True)
+
  
 
 # ========== TAMBAHAN: LIST KPI STATUS HITAM ==========
