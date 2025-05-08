@@ -83,16 +83,16 @@ fig_global.update_layout(
     height=350
 )
 
-# Drilldown chart saat klik bar
-click_data = st.session_state.get("click_data", None)
-clicked = st.plotly_chart(fig_global, use_container_width=True)
+st.plotly_chart(fig_global, use_container_width=True)
 
-if clicked and clicked['points']:
-    selected_status = clicked['points'][0]['x']
-    st.session_state.click_data = selected_status
+st.markdown("### 🔍 Lihat KPI berdasarkan Status:")
+status_buttons = st.columns(4)
+for i, status in enumerate(status_order):
+    if status_buttons[i].button(f"Lihat {status}"):
+        st.session_state['click_data'] = status
 
 if 'click_data' in st.session_state:
-    selected_status = st.session_state.click_data
+    selected_status = st.session_state['click_data']
     st.markdown(f"### KPI dengan Status: {selected_status}")
     st.dataframe(df[df['Status'] == selected_status][display_cols])
 
